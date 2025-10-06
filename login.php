@@ -62,57 +62,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $user = $empData[0];
 
-                if (empty($user['password'])) {
-                    // Send reset email
-                    $token   = bin2hex(random_bytes(16));
-                    $expires = date("c", strtotime("+1 hour"));
+              if (empty($user['password'])) {
 
-                    $url = $projectUrl . "/rest/v1/employees_credentials?employee_id=eq." . urlencode($user_id);
-                    $payload = json_encode([
-                        "reset_token" => $token,
-                        "reset_token_expires" => $expires
-                    ]);
+    // 🕒 Set timezone to Philippine Time
+    date_default_timezone_set('Asia/Manila');
 
-                    $ch = curl_init($url);
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                        "apikey: $apiKey",
-                        "Authorization: Bearer $apiKey",
-                        "Content-Type: application/json",
-                        "Prefer: return=representation"
-                    ]);
-                    curl_exec($ch);
-                    curl_close($ch);
+    // Send reset email
+    $token   = bin2hex(random_bytes(16));
 
-                    $resetLink = "http://localhost/qgcpayslip/set_password.php?token=$token";
+    // ⏱ Changed: expires in 1 minute (PH time)
+    $expires = date("c", strtotime("+1 minute"));
 
-                    $mail = new PHPMailer(true);
-                    try {
-                        $mail->isSMTP();
-                        $mail->Host       = $_ENV['SMTP_HOST'];
-                        $mail->SMTPAuth   = true;
-                        $mail->Username   = $_ENV['SMTP_USER'];
-                        $mail->Password   = $_ENV['SMTP_PASS'];
-                        $mail->SMTPSecure = $_ENV['SMTP_SECURE'];
-                        $mail->Port       = $_ENV['SMTP_PORT'];
+    $url = $projectUrl . "/rest/v1/employees_credentials?employee_id=eq." . urlencode($user_id);
+    $payload = json_encode([
+        "reset_token" => $token,
+        "reset_token_expires" => $expires
+    ]);
 
-                        $mail->setFrom($_ENV['SMTP_USER'], $_ENV['SMTP_FROM_NAME']);
-                        $mail->addAddress($user['email'], $user['complete_name']);
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "apikey: $apiKey",
+        "Authorization: Bearer $apiKey",
+        "Content-Type: application/json",
+        "Prefer: return=representation"
+    ]);
+    curl_exec($ch);
+    curl_close($ch);
 
-                        $mail->isHTML(true);
-                        $mail->Subject = 'Set Your Password';
-                        $mail->Body    = "Hello " . htmlspecialchars($user['complete_name']) . ",<br><br>
-                            Please click the link below to set your password:<br>
-                            <a href='$resetLink'>$resetLink</a><br><br>
-                            This link expires in <b>1 hour</b>.";
+    $resetLink = "http://localhost/qgcpayslip/set_password.php?token=$token";
 
-                        $mail->send();
-                        $message = "A password setup link has been sent to your email.";
-                    } catch (Exception $e) {
-                        $message = "Email error: " . $mail->ErrorInfo;
-                    }
+    // 🕒 Added: readable expiration time for PH timezone
+    $expiresPH = new DateTime($expires);
+    $expiresDisplay = $expiresPH->format('F j, Y g:i:s A'); // ex: October 6, 2025 10:55:47 AM
+
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = $_ENV['SMTP_HOST'];
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $_ENV['SMTP_USER'];
+        $mail->Password   = $_ENV['SMTP_PASS'];
+        $mail->SMTPSecure = $_ENV['SMTP_SECURE'];
+        $mail->Port       = $_ENV['SMTP_PORT'];
+
+        $mail->setFrom($_ENV['SMTP_USER'], $_ENV['SMTP_FROM_NAME']);
+        $mail->addAddress($user['email'], $user['complete_name']);
+
+        $mail->isHTML(true);
+        $mail->Subject = 'Set Your Password';
+        $mail->Body    = "Hello " . htmlspecialchars($user['complete_name']) . ",<br><br>
+            Please click the link below to set your password:<br>
+            <a href='$resetLink'>$resetLink</a><br><br>
+            This link expires in <b>1 minute<br>
+            Expiration time: <b>$expiresDisplay<br><br>
+            Thank you.";
+
+        $mail->send();
+        $message = "A password setup link has been sent to your email.";
+    } catch (Exception $e) {
+        $message = "Email error: " . $mail->ErrorInfo;
+    }
                 } else {
                     $_SESSION['login_role'] = 'employee';
                     $_SESSION['temp_user']  = $user_id;
@@ -161,6 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (password_verify($password, $user['password'])) {
                 $_SESSION['employee_id']   = $user['employee_id'];
                 $_SESSION['complete_name'] = $user['complete_name'];
+                $_SESSION['subsidiary'] = $user['subsidiary'];  // save subsidiary info
                 $_SESSION['role']          = 'employee';
                 unset($_SESSION['temp_user'], $_SESSION['login_role']);
                 header("Location: index.php");

@@ -21,12 +21,11 @@ $projectUrl = $_ENV['SUPABASE_URL'];
 $apiKey     = $_ENV['SUPABASE_KEY'];
 $table      = "payslip_content";
 
-// All valid columns from your schema
 $valid_columns = [
     "payroll_date","cutoff_date","employee_id","name","position","subsidiary","salary_type",
     "late_minutes","days_absent","no_of_hours","basic_rate","basic_pay","ot_hours","ot_rate","ot_pay",
     "rdot_hours","rdot_rate","rdot_pay","nd_hours","nd_rate","night_dif_pay","leave_w_pay",
-    "special_hol_hours","special_hol_rate","special_holiday_pay","reg_hol_rate","reg_holiday_pay",
+    "special_hol_hours","special_hol_rate","special_holiday_pay","reg_hol_hours","reg_hol_rate","regular_holiday_pay",
     "special_hol_ot_hours","special_hol_ot_rate","special_holiday_ot_pay","reg_hol_ot_hours",
     "reg_hol_ot_rate","regular_holiday_ot_pay","allowance","sign_in_bonus","other_adjustment",
     "total_compensation","less_late","less_absent","less_sss","less_phic","less_hdmf","less_whtax",
@@ -35,30 +34,13 @@ $valid_columns = [
     "total_deduction","net_pay"
 ];
 
-// Only numeric columns
-$numeric_columns = [
-    "late_minutes","days_absent","no_of_hours","basic_rate","basic_pay",
-    "ot_hours","ot_rate","ot_pay","rdot_hours","rdot_rate","rdot_pay",
-    "nd_hours","nd_rate","night_dif_pay","leave_w_pay","special_hol_hours",
-    "special_hol_rate","special_holiday_pay","reg_hol_rate","reg_holiday_pay",
-    "special_hol_ot_hours","special_hol_ot_rate","special_holiday_ot_pay",
-    "reg_hol_ot_hours","reg_hol_ot_rate","regular_holiday_ot_pay",
-    "allowance","sign_in_bonus","other_adjustment","total_compensation",
-    "less_late","less_absent","less_sss","less_phic","less_hdmf","less_whtax",
-    "less_sss_loan","less_sss_sloan","less_pagibig_loan","less_comp_cash_advance",
-    "less_company_loan","less_product_equip_loan","less_uniform","less_accountability",
-    "salary_overpaid_deduction","total_deduction","net_pay"
-];
-
-// Helper: clean strings into UTF-8
 function clean_utf8($value) {
-    if (is_string($value)) {
-        return mb_convert_encoding($value, 'UTF-8', 'UTF-8');
-    }
-    return $value;
+    return is_string($value) ? mb_convert_encoding($value, 'UTF-8', 'UTF-8') : $value;
 }
 
-// File upload handler
+$uploadSuccess = false;
+
+// File Upload Handler
 if (isset($_POST['submit'])) {
     if (is_uploaded_file($_FILES['csv_file']['tmp_name'])) {
         $csv_file = fopen($_FILES['csv_file']['tmp_name'], 'r');
@@ -66,35 +48,40 @@ if (isset($_POST['submit'])) {
 
         // Normalize headers
         $headers = array_map(function($h) {
-            $h = trim($h, "\"' \t\n\r\0\x0B");
-            $h = strtolower($h);
-            $h = preg_replace('/[^a-z0-9]+/', '_', $h);
-            $h = preg_replace('/_+/', '_', $h);
-            return trim($h, '_');
+            $h = strtolower(trim($h));
+            $h = preg_replace('/\s+/', '_', $h);
+            $h = preg_replace('/[^a-z0-9_]/', '', $h);
+            return $h;
         }, $headers);
 
-        // Fix common mismatches
-        $header_map = ["employee" => "employee_id"];
+        // Fix misnamed headers
+        $header_map = [
+            "netpay" => "net_pay",
+            "net_pay_" => "net_pay",
+            "salaryoverpaiddeduction" => "salary_overpaid_deduction",
+            "salary_overpaid" => "salary_overpaid_deduction",
+            "salary_overpaid_deduction" => "salary_overpaid_deduction",
+            "payrolldate" => "payroll_date",
+            "cutoffdate" => "cutoff_date"
+        ];
+
         foreach ($headers as &$h) {
             if (isset($header_map[$h])) {
                 $h = $header_map[$h];
             }
         }
+        unset($h);
 
-        // Keep only schema-valid headers
         $headers = array_values(array_intersect($headers, $valid_columns));
-
         $rows = [];
+
         while (($data = fgetcsv($csv_file)) !== FALSE) {
             $data = array_slice($data, 0, count($headers));
             if (count($data) == count($headers)) {
                 $row = array_combine($headers, $data);
-
                 foreach ($row as $key => $value) {
                     if ($value === "" || $value === null) {
                         $row[$key] = null;
-                    } elseif (in_array($key, $numeric_columns)) {
-                        $row[$key] = is_numeric($value) ? (float)$value : null;
                     } elseif ($key === "payroll_date") {
                         $ts = strtotime($value);
                         $row[$key] = $ts ? date("Y-m-d", $ts) : null;
@@ -102,7 +89,6 @@ if (isset($_POST['submit'])) {
                         $row[$key] = clean_utf8($value);
                     }
                 }
-
                 $rows[] = $row;
             }
         }
@@ -111,105 +97,198 @@ if (isset($_POST['submit'])) {
         if (!empty($rows)) {
             $deduped = [];
             foreach ($rows as $row) {
-                $deduped[$row['employee_id']] = $row;
+                $deduped[$row['employee_id'] . '_' . $row['payroll_date']] = $row;
             }
             $rows = array_values($deduped);
-
             $payload = json_encode($rows, JSON_UNESCAPED_UNICODE);
 
-            if ($payload !== false) {
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table");
-                curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                    "apikey: $apiKey",
-                    "Authorization: Bearer $apiKey",
-                    "Content-Type: application/json",
-                    "Prefer: resolution=merge-duplicates"
-                ]);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table");
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "apikey: $apiKey",
+                "Authorization: Bearer $apiKey",
+                "Content-Type: application/json",
+                "Prefer: resolution=merge-duplicates"
+            ]);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            $response = curl_exec($ch);
+            $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-                $response = curl_exec($ch);
-                $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                if ($httpcode == 201) {
-                    echo "<p style='color:green;'>✅ Data successfully uploaded to Supabase!</p>";
-                } else {
-                    echo "<p style='color:red;'>Upload failed. Response: $response</p>";
-                }
+            if ($httpcode == 201) {
+                $uploadSuccess = true;
             }
         }
     }
 }
+
+// Fetch employees
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table?select=name,position,net_pay");
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "apikey: $apiKey",
+    "Authorization: Bearer $apiKey",
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);
+$employees = json_decode($response, true);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payslip Portal - Admin Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
+  <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 </head>
-<body class="bg-gray-50 font-sans">
 
-  <!-- Sidebar Toggle -->
-  <div class="fixed top-4 left-4 z-50">
-    <button id="sidebarToggle" class="bg-blue-600 text-white p-2 rounded-lg shadow-lg">
-      ☰
-    </button>
-  </div>
+<body class="bg-gray-100 font-sans">
 
-  <!-- Sidebar -->
-  <div id="sidebar" class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-40 sidebar-collapsed">
-    <div class="p-6 border-b border-gray-200">
-      <h1 class="text-xl font-bold text-gray-800">Payslip Portal</h1>
-      <p class="text-sm text-gray-600">Admin Dashboard</p>
-    </div>
-    <nav class="mt-6">
-      <a href="#" onclick="showSection('upload')" class="nav-item block px-6 py-3 hover:bg-blue-100">Upload Payslips</a>
-      <a href="#" onclick="showSection('employees')" class="nav-item block px-6 py-3 hover:bg-blue-100">Employee Management</a>
-      <a href="logout.php" class="block px-6 py-3 text-red-600 hover:bg-red-100">Logout</a>
-    </nav>
-  </div>
-
-  <!-- Main -->
-  <div id="mainContent" class="min-h-screen transition-all duration-300">
-    <header class="bg-white shadow-sm border-b border-gray-200 p-4 flex justify-between items-center">
-      <h2 id="pageTitle" class="text-2xl font-semibold text-gray-800">Upload Payslips</h2>
-      <div class="flex items-center space-x-4">
-        <span class="text-sm text-gray-600">Welcome, <?= htmlspecialchars($_SESSION['complete_name']) ?></span>
+<div class="flex h-screen">
+  <!-- sidebar -->
+  <div id="sidebar" class="w-64 bg-black text-white flex flex-col transition-all duration-300 ease-in-out">
+      <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+          <h1 id="sidebarTitle" class="text-xl font-bold">Payslip Portal</h1>
+          <button onclick="toggleSidebar()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+              <svg id="toggleIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+              </svg>
+          </button>
       </div>
+
+      <nav class="flex-1 p-4 space-y-2">
+          <button onclick="showSection('upload')" class="w-full text-left px-4 py-3 rounded-lg bg-white text-black hover:bg-gray-200 flex items-center space-x-3">
+              <i class="bi bi-people"></i>
+              <span class="nav-text">Payslip Management</span>
+          </button>
+
+          <button onclick="showSection('employees')" class="w-full text-left px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 flex items-center space-x-3">
+              <i class="bi bi-pie-chart"></i>
+              <span class="nav-text">Summary</span>
+          </button>
+      </nav>
+
+      <div class="p-4 border-t border-gray-700">
+          <a href="logout.php" class="w-full block px-4 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center space-x-3">
+              <i class="bi bi-box-arrow-right"></i>
+              <span class="nav-text">Log Out</span>
+          </a>
+      </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex flex-col">
+    <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+      <h2 id="pageTitle" class="text-2xl font-semibold text-gray-800">Payslip Management</h2>
+      <span class="text-sm text-gray-600">Welcome, <?= htmlspecialchars($_SESSION['complete_name']) ?></span>
     </header>
 
-    <!-- Upload Section -->
-    <div id="uploadSection" class="section p-6">
-      <div class="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">Upload Payslip CSV</h3>
-        <form method="post" enctype="multipart/form-data" class="space-y-4">
-          <input type="file" name="csv_file" accept=".csv" required class="block w-full">
-          <button type="submit" name="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Upload</button>
-        </form>
-      </div>
-    </div>
+    <main class="flex-1 p-6 overflow-y-auto">
+      <section id="uploadSection" class="section">
+        <div class="max-w-5xl mx-auto bg-white rounded-lg shadow p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Upload Payslip CSV</h3>
+            <form method="post" enctype="multipart/form-data" class="flex items-center space-x-2">
+              <input type="file" name="csv_file" accept=".csv" required class="border border-gray-300 rounded-md p-2" />
+              <button type="submit" name="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Upload</button>
+            </form>
+          </div>
 
-    <!-- Employees Section -->
-    <div id="employeesSection" class="section p-6 hidden">
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold">Employee Directory</h3>
-        <p class="text-gray-600">Employee management content goes here…</p>
-      </div>
-    </div>
+          <table id="employeeTable" class="display min-w-full border border-gray-200 mt-6">
+            <thead class="bg-black text-white">
+              <tr>
+                <th class="py-2 px-4 text-left">Employee Name</th>
+                <th class="py-2 px-4 text-left">Position</th>
+                <th class="py-2 px-4 text-left">Net Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (!empty($employees)): ?>
+                <?php foreach ($employees as $emp): ?>
+                  <tr>
+                    <td class="py-2 px-4"><?= htmlspecialchars($emp['name'] ?? '-') ?></td>
+                    <td class="py-2 px-4"><?= htmlspecialchars($emp['position'] ?? '-') ?></td>
+                    <td class="py-2 px-4">₱<?= htmlspecialchars($emp['net_pay'] ?? '0.00') ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="employeesSection" class="section hidden">
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-lg font-semibold">Payroll Summary</h3>
+          <p class="text-gray-600">Employee management content goes here…</p>
+        </div>
+      </section>
+    </main>
   </div>
+</div>
 
-  <script>
-    function showSection(section) {
-      document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
-      document.getElementById(section + 'Section').classList.remove('hidden');
-      document.getElementById('pageTitle').textContent =
-        section === 'upload' ? 'Upload Payslips' : 'Employee Management';
-    }
-  </script>
+<?php if ($uploadSuccess): ?>
+<div id="successModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm text-center">
+    <i class="bi bi-check-circle text-green-600 text-4xl mb-3"></i>
+    <h3 class="text-lg font-semibold mb-2">Upload Successful</h3>
+    <p class="text-gray-600 mb-4">Payslip data has been successfully uploaded.</p>
+    <button onclick="closeModal()" class="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800">OK</button>
+  </div>
+</div>
+<?php endif; ?>
+
+<script>
+function showSection(section) {
+  document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
+  document.getElementById(section + "Section").classList.remove("hidden");
+  document.getElementById("pageTitle").textContent = section === "upload" ? "Upload Payslips" : "Payroll Summary";
+}
+
+// Sidebar collapse animation
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const sidebarTitle = document.getElementById('sidebarTitle');
+  const toggleIcon = document.getElementById('toggleIcon');
+  const navTexts = document.querySelectorAll('.nav-text');
+  const navButtons = document.querySelectorAll('nav button, a');
+
+  if (sidebar.classList.contains('w-64')) {
+      sidebar.classList.remove('w-64');
+      sidebar.classList.add('w-16');
+      sidebarTitle.style.display = 'none';
+      navTexts.forEach(t => t.style.display = 'none');
+      navButtons.forEach(b => { b.classList.add('justify-center'); b.classList.remove('space-x-3'); });
+      toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>';
+  } else {
+      sidebar.classList.remove('w-16');
+      sidebar.classList.add('w-64');
+      sidebarTitle.style.display = 'block';
+      navTexts.forEach(t => t.style.display = 'block');
+      navButtons.forEach(b => { b.classList.remove('justify-center'); b.classList.add('space-x-3'); });
+      toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
+  }
+}
+
+function closeModal() {
+  document.getElementById('successModal').style.display = 'none';
+}
+
+$(document).ready(function() {
+  $('#employeeTable').DataTable({
+    pageLength: 10,
+    lengthMenu: [5, 10, 25, 50],
+    order: [[0, 'asc']],
+    language: { search: "_INPUT_", searchPlaceholder: "Search employee..." }
+  });
+});
+</script>
 </body>
 </html>
