@@ -21,8 +21,8 @@ $subsidiaryStyles = [
     'QGC'              => ['logo' => 'qgc.png', 'color' => '#aaaaaaff'],
     'WATERGATE'        => ['logo' => 'logos/watergate.png', 'color' => '#0284c7'],
     'SARI-SARI MANOKAN'=> ['logo' => 'logos/sari-sari_manokan.png', 'color' => '#00973fff'],
-    'PALUTO'           => ['logo' => 'logos/paluto.png', 'color' => '#cc1800ff'],
-    'COMMISSARY'       => ['logo' => 'logos/commissary.png', 'color' => '#cc1800ff'],
+    'PALUTO'           => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
+    'COMMISSARY'       => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
     'BRIGHTLINE'       => ['logo' => 'BL.png', 'color' => '#df6808ff'],
     'BMMI-WAREHOUSE'   => ['logo' => 'BMMI.png', 'color' => '#df6808ff'],
     'BMMI-DROPSHIPPING'=> ['logo' => 'BMMI.png', 'color' => '#df6808ff'],
@@ -45,18 +45,18 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $payslips = json_decode($response, true) ?? [];
-
 // 🔹 Determine which payslip to show
 $selectedPayslip = null;
 if (!empty($payslips)) {
-    if (isset($_POST['cutoff_date'])) {
-        foreach ($payslips as $p) {
-            if ($p['cutoff_date'] === $_POST['cutoff_date']) {
-                $selectedPayslip = $p;
-                break;
-            }
+    if (isset($_POST['payroll_date'])) {
+    foreach ($payslips as $p) {
+        if ($p['payroll_date'] === $_POST['payroll_date']) {
+            $selectedPayslip = $p;
+            break;
         }
-    } else {
+    }
+}
+ else {
         $selectedPayslip = $payslips[0]; // latest by default
     }
 }
@@ -73,10 +73,8 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   
 </head>
-
 <body class="bg-gradient-to-br from-gray-200 via-gray-300 to-gray-400 text-white font-sans">
 <div class="flex h-screen">
-
 
   <!-- Sidebar -->
   <div id="sidebar" class="w-64 bg-black text-white flex flex-col transition-all duration-300 ease-in-out">
@@ -90,7 +88,7 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
       </div>
 
       <nav class="flex-1 p-4 space-y-2">
-          <a href="dashboard.php" class="w-full block text-left px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 flex items-center space-x-3">
+          <a href="employeedashboard.php" class="w-full block text-left px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 flex items-center space-x-3">
               <i class="bi bi-speedometer2"></i>
               <span class="nav-text">Dashboard</span>
           </a>
@@ -111,31 +109,40 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
   <!-- Main Content -->
   <div class="flex-1 flex flex-col overflow-y-auto">
     <header class="bg-black shadow-sm border-b border-gray-800 px-6 py-4 flex justify-between items-center">
-      <h2 class="text-xl font-semibold">Mabuhay, <?= htmlspecialchars($_SESSION['complete_name'] ?? '') ?></h2>
+      <h2 class="text-xl font-semibold">Welcome, <?= htmlspecialchars($_SESSION['complete_name'] ?? '') ?></h2>
     </header>
 
     <main class="flex-1 flex flex-col items-center justify-start py-10 px-4">
       <?php if (empty($payslips)): ?>
         <p class="text-black text-lg">No payslips available.</p>
       <?php else: ?>
-        <!-- Dropdown for Payslip Dates -->
-        <form method="post" class="mb-6">
-          <select name="cutoff_date" onchange="this.form.submit()" class="bg-black text-white px-4 py-2 rounded-md">
-            <?php foreach ($payslips as $p): ?>
-              <?php 
-                $isSelected = isset($selectedPayslip) && isset($selectedPayslip['payroll_date']) && $selectedPayslip['payroll_date'] === $p['payroll_date'];
-              ?>
-              <option value="<?= htmlspecialchars($p['payroll_date']) ?>" <?= $isSelected ? 'selected' : '' ?>>
-                <?= date('F j, Y', strtotime($p['payroll_date'])) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </form>
+       <!-- Dropdown + Download Button -->
+<div class="flex items-center justify-center space-x-3 mb-6">
+  <form method="post" id="payslipForm" class="flex items-center space-x-3">
+   <select name="payroll_date" onchange="this.form.submit()" class="bg-black text-white px-4 py-2 rounded-md">
+  <?php foreach ($payslips as $p): ?>
+    <?php 
+      $isSelected = isset($selectedPayslip) && isset($selectedPayslip['payroll_date']) && $selectedPayslip['payroll_date'] === $p['payroll_date'];
+    ?>
+    <option value="<?= htmlspecialchars($p['payroll_date']) ?>" <?= $isSelected ? 'selected' : '' ?>>
+      <?= date('F j, Y', strtotime($p['payroll_date'])) ?>
+    </option>
+  <?php endforeach; ?>
+</select>
+
+  </form>
+
+  <!-- Download PDF Button -->
+  <button id="downloadPdfBtn" class="bg-black text-white px-4 py-2 rounded-md flex items-center space-x-2">
+    <span>Download PDF</span>
+  </button>
+</div>
 
         <!-- Payslip Card -->
         <div class="bg-white text-black rounded-xl shadow-lg w-full max-w-3xl p-8">
           <div class="text-center border-b border-gray-300 pb-4 mb-4">
             <img src="<?= htmlspecialchars($logoPath) ?>" class="mx-auto h-12 mb-2" alt="Logo">
+            <p class="font-semibold"><?= htmlspecialchars($_SESSION['subsidiary'] ?? '-') ?></p>
             <p class="text-sm text-gray-600">HUERVANA ST., BURGOS-MABINI, LA PAZ, ILOILO CITY, 5000</p>
             <p class="text-sm text-gray-600">MANAGEMENT@QUIRAOGROUP.COM</p>
           </div>
@@ -206,6 +213,7 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
                 <tr><td>Late</td><td class="text-right">₱<?= number_format($selectedPayslip['less_late'] ?? 0, 2) ?></td></tr>
                 <tr><td>PHIC</td><td class="text-right">₱<?= number_format($selectedPayslip['less_phic'] ?? 0, 2) ?></td></tr>
                 <tr><td>HDMF</td><td class="text-right">₱<?= number_format($selectedPayslip['less_hdmf'] ?? 0, 2) ?></td></tr>
+                 <tr><td>SSS</td><td class="text-right">₱<?= number_format($selectedPayslip['less_sss'] ?? 0, 2) ?></td></tr>
               </table>
               <p class="font-semibold mt-2 text-right">Total Deduction: ₱<?= number_format($selectedPayslip['total_deduction'] ?? 0, 2) ?></p>
             </div>
@@ -224,6 +232,8 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
 </div>
 
 <script>
+
+
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const sidebarTitle = document.getElementById('sidebarTitle');
@@ -246,7 +256,90 @@ function toggleSidebar() {
       navButtons.forEach(b => { b.classList.remove('justify-center'); b.classList.add('space-x-3'); });
       toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
   }
+
 }
 </script>
+<!-- jsPDF + html2canvas CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+document.getElementById('downloadPdfBtn')?.addEventListener('click', async () => {
+  const { jsPDF } = window.jspdf;
+  const payslipCard = document.querySelector('.bg-white.text-black.rounded-xl.shadow-lg');
+
+  if (!payslipCard) {
+    alert('No payslip available to download.');
+    return;
+  }
+
+  // Capture payslip as canvas
+  const canvas = await html2canvas(payslipCard, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff"
+  });
+
+  const imgData = canvas.toDataURL('image/png');
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = 210;
+  const imgWidth = pageWidth - 20;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  // Add payslip content
+  pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+
+  // --- ✨ Position footer just below NET PAY section ---
+  let footerStartY = imgHeight + 20; // 20mm below the payslip content
+  const maxY = 260; // prevent from going too low
+  if (footerStartY > maxY) footerStartY = maxY;
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(50, 50, 50);
+  pdf.setLineWidth(0.2);
+
+  // Top line
+  pdf.line(10, footerStartY, pageWidth - 10, footerStartY);
+
+  // Disclaimer text
+  pdf.setFontSize(9.5);
+  pdf.text('Disclaimer:', 10, footerStartY + 6);
+  pdf.setFontSize(8.5);
+  const disclaimerText = [
+    'This payslip can be used for any valid purposes you may require, including but not limited to employment verification,',
+    'loan applications, visa or travel documentation, and proof of income for financial institutions.',
+    'Should you need further assistance or additional documentation, feel free to reach out.'
+  ];
+  let y = footerStartY + 11;
+  disclaimerText.forEach(line => {
+    pdf.text(line, 10, y);
+    y += 4.5;
+  });
+
+  // Bottom line
+  pdf.line(10, y + 2, pageWidth - 10, y + 2);
+
+  // Footer company info (centered)
+  pdf.setFontSize(9);
+  pdf.text('Managed by QUIRAO GROUP OF COMPANIES, OPC', pageWidth / 2, y + 8, { align: 'center' });
+  pdf.text('© 2025 All rights reserved.', pageWidth / 2, y + 13, { align: 'center' });
+
+// Save PDF
+// Try to get name from element labeled "Employee Name:"
+let employeeName = 'Employee';
+document.querySelectorAll('.bg-gray-100').forEach(block => {
+  const label = block.querySelector('p.text-xs')?.textContent?.toLowerCase() || '';
+  if (label.includes('employee name')) {
+    employeeName = block.querySelector('.font-semibold')?.textContent?.trim() || 'Employee';
+  }
+});
+
+employeeName = employeeName.replace(/\s+/g, '_'); // make filename safe
+pdf.save(`Payslip_${employeeName}.pdf`);
+});
+
+
+</script>
+
 </body>
 </html>

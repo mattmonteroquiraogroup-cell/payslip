@@ -126,7 +126,7 @@ if (isset($_POST['submit'])) {
 
 // Fetch employees
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table?select=name,position,net_pay");
+curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table?select=employee_id,name,position,net_pay,payroll_date");
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "apikey: $apiKey",
     "Authorization: Bearer $apiKey",
@@ -201,9 +201,18 @@ $employees = json_decode($response, true);
             </form>
           </div>
 
+          <!-- 🔍 Payroll Date Filter -->
+          <div class="flex items-center space-x-2 mb-4">
+            <label for="payrollFilter" class="text-gray-700 font-medium">Filter by Payroll Date:</label>
+            <input type="date" id="payrollFilter" class="border border-gray-300 rounded-md p-2" />
+            <button id="clearFilter" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded-md">Clear</button>
+          </div>
+
           <table id="employeeTable" class="display min-w-full border border-gray-200 mt-6">
             <thead class="bg-black text-white">
               <tr>
+                <th class="py-2 px-4 text-left">Payroll Date</th>
+                <th class="py-2 px-4 text-left">Employee ID</th>
                 <th class="py-2 px-4 text-left">Employee Name</th>
                 <th class="py-2 px-4 text-left">Position</th>
                 <th class="py-2 px-4 text-left">Net Pay</th>
@@ -213,6 +222,8 @@ $employees = json_decode($response, true);
               <?php if (!empty($employees)): ?>
                 <?php foreach ($employees as $emp): ?>
                   <tr>
+                    <td class="py-2 px-4"><?= htmlspecialchars($emp['payroll_date'] ?? '-') ?></td>
+                    <td class="py-2 px-4"><?= htmlspecialchars($emp['employee_id'] ?? '-') ?></td>
                     <td class="py-2 px-4"><?= htmlspecialchars($emp['name'] ?? '-') ?></td>
                     <td class="py-2 px-4"><?= htmlspecialchars($emp['position'] ?? '-') ?></td>
                     <td class="py-2 px-4">₱<?= htmlspecialchars($emp['net_pay'] ?? '0.00') ?></td>
@@ -249,7 +260,7 @@ $employees = json_decode($response, true);
 function showSection(section) {
   document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
   document.getElementById(section + "Section").classList.remove("hidden");
-  document.getElementById("pageTitle").textContent = section === "upload" ? "Upload Payslips" : "Payroll Summary";
+  document.getElementById("pageTitle").textContent = section === "upload" ? "Payslip Management" : "Payroll Summary";
 }
 
 // Sidebar collapse animation
@@ -282,11 +293,26 @@ function closeModal() {
 }
 
 $(document).ready(function() {
-  $('#employeeTable').DataTable({
+  var table = $('#employeeTable').DataTable({
     pageLength: 10,
     lengthMenu: [5, 10, 25, 50],
     order: [[0, 'asc']],
-    language: { search: "_INPUT_", searchPlaceholder: "Search employee..." }
+    language: { search: "_INPUT_", searchPlaceholder: "Search employee" }
+  });
+
+  // Payroll date filter logic
+  $('#payrollFilter').on('change', function() {
+    var selectedDate = this.value.trim();
+    if (selectedDate) {
+      table.column(0).search(selectedDate, true, false).draw();
+    } else {
+      table.column(0).search('').draw();
+    }
+  });
+
+  $('#clearFilter').on('click', function() {
+    $('#payrollFilter').val('');
+    table.column(0).search('').draw();
   });
 });
 </script>

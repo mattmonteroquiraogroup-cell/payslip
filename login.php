@@ -176,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['subsidiary'] = $user['subsidiary'];  // save subsidiary info
                 $_SESSION['role']          = 'employee';
                 unset($_SESSION['temp_user'], $_SESSION['login_role']);
-                header("Location: index.php");
+                header("Location: employeedashboard.php");
                 exit;
             } else {
                 $message = "Invalid password.";
@@ -214,8 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     .login-card img {
       margin-bottom: 1.5rem;
-      border-radius: 50%;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      
     }
     .login-card h1 {
       font-size: 1.8rem;
@@ -277,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
   <div class="login-card">
-    <img src="qgc.png" alt="QGC Logo" width="90" height="90">
+    <img src="qgc.png" alt="QGC Logo" width="150" height="100">
     <h1>Payslip Portal</h1>
     <p>Sign in to access your account</p>
 
