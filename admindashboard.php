@@ -169,10 +169,6 @@ $employees = json_decode($response, true);
               <span class="nav-text">Payslip Management</span>
           </button>
 
-          <button onclick="showSection('employees')" class="w-full text-left px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 flex items-center space-x-3">
-              <i class="bi bi-pie-chart"></i>
-              <span class="nav-text">Summary</span>
-          </button>
       </nav>
 
       <div class="p-4 border-t border-gray-700">
@@ -186,8 +182,8 @@ $employees = json_decode($response, true);
   <!-- Main Content -->
   <div class="flex-1 flex flex-col">
     <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
-      <h2 id="pageTitle" class="text-2xl font-semibold text-gray-800">Payslip Management</h2>
       <span class="text-sm text-gray-600">Welcome, <?= htmlspecialchars($_SESSION['complete_name']) ?></span>
+      <h2 id="pageTitle" class="text-2xl font-semibold text-gray-800">Payslip Management</h2>
     </header>
 
     <main class="flex-1 p-6 overflow-y-auto">

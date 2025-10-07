@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 🕒 Added: readable expiration time for PH timezone
     $expiresPH = new DateTime($expires);
-    $expiresDisplay = $expiresPH->format('F j, Y g:i:s A'); // ex: October 6, 2025 10:55:47 AM
+    $expiresDisplay = $expiresPH->format('F j, Y '); // ex: October 6, 2025 10:55:47 AM
 
     $mail = new PHPMailer(true);
     try {
