@@ -20,9 +20,9 @@ $subsidiary  = strtoupper($_SESSION['subsidiary'] ?? 'QGC');
 $subsidiaryStyles = [
     'QGC'              => ['logo' => 'qgc.png', 'color' => '#aaaaaaff'],
     'WATERGATE'        => ['logo' => 'WTG.png', 'color' => '#0284c7'],
-    'SARI-SARI MANOKAN'=> ['logo' => 'SSM.png', 'color' => '#00973fff'],
-    'PALUTO'           => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
-    'COMMISSARY'       => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
+    'SARI-SARI MANOKAN'=> ['logo' => 'PFC.png', 'color' => '#00973fff'],
+    'PALUTO'           => ['logo' => 'PFC.png', 'color' => '#cc1800ff'],
+    'COMMISSARY'       => ['logo' => 'PFC.png', 'color' => '#cc1800ff'],
     'BRIGHTLINE'       => ['logo' => 'BL.png', 'color' => '#df6808ff'],
     'BMMI-WAREHOUSE'   => ['logo' => 'BMMI.png', 'color' => '#df6808ff'],
     'BMMI-DROPSHIPPING'=> ['logo' => 'BMMI.png', 'color' => '#df6808ff'],
