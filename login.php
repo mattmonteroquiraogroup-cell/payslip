@@ -276,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
   <div class="login-card">
-    <img src="qgc.png" alt="QGC Logo" width="150" height="100">
+    <img src="qgc.png" alt="QGC Logo" width="90" height="45">
     <h1>Payslip Portal</h1>
     <p>Sign in to access your account</p>
 

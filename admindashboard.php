@@ -40,13 +40,48 @@ function clean_utf8($value) {
 
 $uploadSuccess = false;
 
-// File Upload Handler
+// ✅ Fixed: Add Employee (no password) to employee_credentials
+if (isset($_POST['action']) && $_POST['action'] === 'add_employee') {
+    $employeeData = [
+        "employee_id" => $_POST['employee_id'] ?? null,
+        "complete_name" => $_POST['complete_name'] ?? null,
+        "position" => $_POST['position'] ?? null,
+        "email" => $_POST['email'] ?? null,
+        "subsidiary" => $_POST['subsidiary'] ?? null
+    ];
+
+    // Prepare JSON payload for Supabase
+    $payload = json_encode([$employeeData], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/employees_credentials");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "apikey: $apiKey",
+        "Authorization: Bearer $apiKey",
+        "Content-Type: application/json",
+        "Prefer: return=representation"
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode == 201) {
+        header("Location: admindashboard.php?added=success");
+        exit();
+    } else {
+        echo "<script>alert('Employee Already Exists');</script>";
+    }
+}
+// ✅ NEW CODE END
+
+// 📤 Existing CSV upload handler (untouched)
 if (isset($_POST['submit'])) {
     if (is_uploaded_file($_FILES['csv_file']['tmp_name'])) {
         $csv_file = fopen($_FILES['csv_file']['tmp_name'], 'r');
         $headers = fgetcsv($csv_file);
-
-        // Normalize headers
         $headers = array_map(function($h) {
             $h = strtolower(trim($h));
             $h = preg_replace('/\s+/', '_', $h);
@@ -54,7 +89,6 @@ if (isset($_POST['submit'])) {
             return $h;
         }, $headers);
 
-        // Fix misnamed headers
         $header_map = [
             "netpay" => "net_pay",
             "net_pay_" => "net_pay",
@@ -124,7 +158,7 @@ if (isset($_POST['submit'])) {
     }
 }
 
-// Fetch employees
+// 📥 Existing fetch employees logic
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, "$projectUrl/rest/v1/$table?select=employee_id,name,position,net_pay,payroll_date");
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -150,17 +184,18 @@ $employees = json_decode($response, true);
 </head>
 
 <body class="bg-gray-100 font-sans">
-
 <div class="flex h-screen">
-  <!-- sidebar -->
+
+  <!-- Sidebar -->
   <div id="sidebar" class="w-64 bg-black text-white flex flex-col transition-all duration-300 ease-in-out">
       <div class="p-6 border-b border-gray-700 flex items-center justify-between">
           <h1 id="sidebarTitle" class="text-xl font-bold">Payslip Portal</h1>
-          <button onclick="toggleSidebar()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
-              <svg id="toggleIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
-              </svg>
-          </button>
+         <button onclick="toggleSidebar()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+  <svg id="toggleIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+  </svg>
+</button>
+
       </div>
 
       <nav class="flex-1 p-4 space-y-2">
@@ -168,7 +203,6 @@ $employees = json_decode($response, true);
               <i class="bi bi-people"></i>
               <span class="nav-text">Payslip Management</span>
           </button>
-
       </nav>
 
       <div class="p-4 border-t border-gray-700">
@@ -179,25 +213,29 @@ $employees = json_decode($response, true);
       </div>
   </div>
 
-  <!-- Main Content -->
+  <!-- Main -->
   <div class="flex-1 flex flex-col">
     <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
       <span class="text-sm text-gray-600">Welcome, <?= htmlspecialchars($_SESSION['complete_name']) ?></span>
-      <h2 id="pageTitle" class="text-2xl font-semibold text-gray-800">Payslip Management</h2>
     </header>
 
     <main class="flex-1 p-6 overflow-y-auto">
       <section id="uploadSection" class="section">
         <div class="max-w-5xl mx-auto bg-white rounded-lg shadow p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">Upload Payslip CSV</h3>
-            <form method="post" enctype="multipart/form-data" class="flex items-center space-x-2">
-              <input type="file" name="csv_file" accept=".csv" required class="border border-gray-300 rounded-md p-2" />
-              <button type="submit" name="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Upload</button>
-            </form>
+<div class="flex justify-end mb-6">
+  <button onclick="openUploadModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+    <span>Upload Payslip</span>
+  </button>
+</div>
+
+          <!-- ✅ NEW Add Employee Button -->
+          <div class="flex justify-end mb-4">
+            <button onclick="openAddModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+            <span>Add Employee</span>
+            </button>
           </div>
 
-          <!-- 🔍 Payroll Date Filter -->
+          <!-- Payroll Date Filter -->
           <div class="flex items-center space-x-2 mb-4">
             <label for="payrollFilter" class="text-gray-700 font-medium">Filter by Payroll Date:</label>
             <input type="date" id="payrollFilter" class="border border-gray-300 rounded-md p-2" />
@@ -207,22 +245,22 @@ $employees = json_decode($response, true);
           <table id="employeeTable" class="display min-w-full border border-gray-200 mt-6">
             <thead class="bg-black text-white">
               <tr>
-                <th class="py-2 px-4 text-left">Payroll Date</th>
-                <th class="py-2 px-4 text-left">Employee ID</th>
-                <th class="py-2 px-4 text-left">Employee Name</th>
-                <th class="py-2 px-4 text-left">Position</th>
-                <th class="py-2 px-4 text-left">Net Pay</th>
+                <th>Payroll Date</th>
+                <th>Employee ID</th>
+                <th>Employee Name</th>
+                <th>Position</th>
+                <th>Net Pay</th>
               </tr>
             </thead>
             <tbody>
               <?php if (!empty($employees)): ?>
                 <?php foreach ($employees as $emp): ?>
                   <tr>
-                    <td class="py-2 px-4"><?= htmlspecialchars($emp['payroll_date'] ?? '-') ?></td>
-                    <td class="py-2 px-4"><?= htmlspecialchars($emp['employee_id'] ?? '-') ?></td>
-                    <td class="py-2 px-4"><?= htmlspecialchars($emp['name'] ?? '-') ?></td>
-                    <td class="py-2 px-4"><?= htmlspecialchars($emp['position'] ?? '-') ?></td>
-                    <td class="py-2 px-4">₱<?= htmlspecialchars($emp['net_pay'] ?? '0.00') ?></td>
+                    <td><?= htmlspecialchars($emp['payroll_date'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($emp['employee_id'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($emp['name'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($emp['position'] ?? '-') ?></td>
+                    <td>₱<?= htmlspecialchars($emp['net_pay'] ?? '0.00') ?></td>
                   </tr>
                 <?php endforeach; ?>
               <?php endif; ?>
@@ -230,87 +268,173 @@ $employees = json_decode($response, true);
           </table>
         </div>
       </section>
-
-      <section id="employeesSection" class="section hidden">
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-lg font-semibold">Payroll Summary</h3>
-          <p class="text-gray-600">Employee management content goes here…</p>
-        </div>
-      </section>
     </main>
-  </div>
-</div>
-
-<?php if ($uploadSuccess): ?>
+  <?php if ($uploadSuccess): ?>
 <div id="successModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
   <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm text-center">
     <i class="bi bi-check-circle text-green-600 text-4xl mb-3"></i>
     <h3 class="text-lg font-semibold mb-2">Upload Successful</h3>
     <p class="text-gray-600 mb-4">Payslip data has been successfully uploaded.</p>
-    <button onclick="closeModal()" class="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800">OK</button>
+    <button onclick="closeSuccessModal()" class="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800">OK</button>
   </div>
 </div>
 <?php endif; ?>
 
+<!-- ✅ Upload CSV Modal -->
+<div id="uploadModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-6">
+    <h3 class="text-lg font-semibold mb-4 text-gray-800">Upload Payslip</h3>
+    <form method="post" enctype="multipart/form-data" id="csvUploadModalForm" onsubmit="showUploadSpinner()" class="flex flex-col gap-4">
+      <input type="file" name="csv_file" accept=".csv" required class="border border-gray-300 rounded-md p-2" />
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeUploadModal()" class="bg-gray-300 hover:bg-gray-400 text-black px-4 py-2 rounded-lg">Cancel</button>
+        <button type="submit" name="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+          <span>Upload</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+  </div>
+</div>
+<!-- Add Employee Success Modal -->
+<?php if (isset($_GET['added']) && $_GET['added'] === 'success'): ?>
+<div id="employeeAddedModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm text-center">
+    <i class="bi bi-check-circle text-green-600 text-4xl mb-3"></i>
+    <h3 class="text-lg font-semibold mb-2">Employee Added</h3>
+    <p class="text-gray-600 mb-4">The new employee has been added successfully.</p>
+    <button onclick="closeEmployeeModal()" class="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800">OK</button>
+  </div>
+</div>
+<?php endif; ?>
+<!-- Add Employee Modal -->
+<div id="employeeModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
+    <h3 class="text-lg font-semibold mb-4">Add Employee</h3>
+    <form method="post" id="employeeForm" class="grid grid-cols-2 gap-4">
+      <input type="hidden" name="action" value="add_employee">
+      <?php
+      foreach (["employee_id","complete_name","position","email","subsidiary"] as $field) {
+        // Custom label formatting for Employee ID
+        $label = ucwords(str_replace('_', ' ', $field));
+        if ($field === "employee_id") {
+          $label = "Employee ID";
+        }
+        echo "<div>
+                <label class='block text-sm font-medium text-gray-700 mb-1'>{$label}</label>
+                <input type='text' name='{$field}' class='border border-gray-300 rounded-md w-full p-2'>
+              </div>";
+      }
+      ?>
+      <div class="col-span-2 flex justify-end space-x-3 mt-4">
+        <button type="button" onclick="closeModal()" class="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
 <script>
-function showSection(section) {
-  document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
-  document.getElementById(section + "Section").classList.remove("hidden");
-  document.getElementById("pageTitle").textContent = section === "upload" ? "Payslip Management" : "Payroll Summary";
+
+  function openUploadModal() {
+  document.getElementById('uploadModal').classList.remove('hidden');
 }
 
-// Sidebar collapse animation
-function toggleSidebar() {
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.add('hidden');
+}
+
+  function closeSuccessModal() {
+  const modal = document.getElementById('successModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+  function closeEmployeeModal() {
+  const modal = document.getElementById('employeeAddedModal');
+  if (modal) modal.classList.add('hidden');
+  // remove the query string so it doesn’t reopen on refresh
+  const url = new URL(window.location);
+  url.searchParams.delete('added');
+  window.history.replaceState({}, document.title, url);
+}
+
+  function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const sidebarTitle = document.getElementById('sidebarTitle');
   const toggleIcon = document.getElementById('toggleIcon');
   const navTexts = document.querySelectorAll('.nav-text');
-  const navButtons = document.querySelectorAll('nav button, a');
+  const navButtons = document.querySelectorAll('nav button, nav a');
 
   if (sidebar.classList.contains('w-64')) {
-      sidebar.classList.remove('w-64');
-      sidebar.classList.add('w-16');
-      sidebarTitle.style.display = 'none';
-      navTexts.forEach(t => t.style.display = 'none');
-      navButtons.forEach(b => { b.classList.add('justify-center'); b.classList.remove('space-x-3'); });
-      toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>';
+    // Collapse
+    sidebar.classList.remove('w-64');
+    sidebar.classList.add('w-16');
+    sidebarTitle.style.display = 'none';
+    navTexts.forEach(t => t.style.display = 'none');
+    navButtons.forEach(b => {
+      b.classList.add('justify-center');
+      b.classList.remove('space-x-3');
+    });
+    toggleIcon.innerHTML =
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>';
   } else {
-      sidebar.classList.remove('w-16');
-      sidebar.classList.add('w-64');
-      sidebarTitle.style.display = 'block';
-      navTexts.forEach(t => t.style.display = 'block');
-      navButtons.forEach(b => { b.classList.remove('justify-center'); b.classList.add('space-x-3'); });
-      toggleIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
+    // Expand
+    sidebar.classList.remove('w-16');
+    sidebar.classList.add('w-64');
+    sidebarTitle.style.display = 'block';
+    navTexts.forEach(t => t.style.display = 'block');
+    navButtons.forEach(b => {
+      b.classList.remove('justify-center');
+      b.classList.add('space-x-3');
+    });
+    toggleIcon.innerHTML =
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
   }
+}
+  function showUploadSpinner() {
+  const spinner = document.getElementById('uploadSpinner');
+  if (spinner) spinner.classList.remove('hidden');
+}
+
+function hideUploadSpinner() {
+  const spinner = document.getElementById('uploadSpinner');
+  if (spinner) spinner.classList.add('hidden');
+}
+
+function openAddModal() {
+  document.getElementById('employeeForm').reset();
+  document.getElementById('employeeModal').classList.remove('hidden');
 }
 
 function closeModal() {
-  document.getElementById('successModal').style.display = 'none';
+  // Close Add Employee Modal (if open)
+  const employeeModal = document.getElementById('employeeModal');
+  if (employeeModal && !employeeModal.classList.contains('hidden')) {
+    employeeModal.classList.add('hidden');
+  }
+
+  // Close Upload Success Modal (if open)
+  const successModal = document.getElementById('successModal');
+  if (successModal && !successModal.classList.contains('hidden')) {
+    successModal.classList.add('hidden');
+  }
 }
 
-$(document).ready(function() {
-  var table = $('#employeeTable').DataTable({
-    pageLength: 10,
-    lengthMenu: [5, 10, 25, 50],
-    order: [[0, 'asc']],
-    language: { search: "_INPUT_", searchPlaceholder: "Search employee" }
-  });
-
-  // Payroll date filter logic
-  $('#payrollFilter').on('change', function() {
-    var selectedDate = this.value.trim();
-    if (selectedDate) {
-      table.column(0).search(selectedDate, true, false).draw();
-    } else {
-      table.column(0).search('').draw();
-    }
-  });
-
-  $('#clearFilter').on('click', function() {
-    $('#payrollFilter').val('');
-    table.column(0).search('').draw();
-  });
+$(document).ready(function(){
+  var table=$('#employeeTable').DataTable({pageLength:10,lengthMenu:[5,10,25,50],order:[[0,'asc']],language:{search:"_INPUT_",searchPlaceholder:"Search employee"}});
+  $('#payrollFilter').on('change',function(){var d=this.value.trim();if(d){table.column(0).search(d,true,false).draw();}else{table.column(0).search('').draw();}});
+  $('#clearFilter').on('click',function(){$('#payrollFilter').val('');table.column(0).search('').draw();});
 });
 </script>
+<!-- Uploading Spinner Overlay -->
+<div id="uploadSpinner" class="hidden fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-[9999]">
+  <div class="flex flex-col items-center text-center text-white">
+    <svg class="animate-spin h-10 w-10 text-white mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+    </svg>
+    <p class="text-lg font-semibold">Uploading CSV...</p>
+  </div>
+</div>
 </body>
 </html>

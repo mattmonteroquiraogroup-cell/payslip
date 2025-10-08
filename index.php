@@ -19,7 +19,7 @@ $subsidiary  = strtoupper($_SESSION['subsidiary'] ?? 'QGC');
 // 🖼️ Map each subsidiary to its logo and color
 $subsidiaryStyles = [
     'QGC'              => ['logo' => 'qgc.png', 'color' => '#aaaaaaff'],
-    'WATERGATE'        => ['logo' => 'watergate.png', 'color' => '#0284c7'],
+    'WATERGATE'        => ['logo' => 'WTG.png', 'color' => '#0284c7'],
     'SARI-SARI MANOKAN'=> ['logo' => 'SSM.png', 'color' => '#00973fff'],
     'PALUTO'           => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
     'COMMISSARY'       => ['logo' => 'paluto.png', 'color' => '#cc1800ff'],
@@ -98,7 +98,7 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
           </a>
           <a href="index.php" class="w-full block text-left px-4 py-3 rounded-lg bg-white text-black flex items-center space-x-3">
               <i class="bi bi-cash-coin"></i>
-              <span class="nav-text">My Payslips</span>
+              <span class="nav-text">View Payslips</span>
           </a>
       </nav>
 
@@ -144,9 +144,8 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
       <!-- Payslip Card -->
       <div class="bg-white text-black rounded-xl shadow-lg w-full max-w-3xl p-8">
         <div class="text-center border-b border-gray-300 pb-4 mb-4">
-          <img src="<?= htmlspecialchars($logoPath) ?>" class="mx-auto h-12 mb-2" alt="Logo">
-          <p class="font-semibold"><?= htmlspecialchars($_SESSION['subsidiary'] ?? '-') ?></p>
-          <p class="text-sm text-gray-600">HUERVANA ST., BURGOS-MABINI, LA PAZ, ILOILO CITY, 5000</p>
+          <img src="<?= htmlspecialchars($logoPath) ?>" width="90" height="45" class="mx-auto mb-2" alt="Logo">
+          <p class="text-sm text-gray-600">Huervana St., Burgos-Mabini, La Paz, Iloilo City, 5000</p>
           <p class="text-sm text-gray-600">management@quiraogroup.com</p>
         </div>
 
@@ -180,22 +179,51 @@ $position = $selectedPayslip['position'] ?? ($_SESSION['position'] ?? '-');
               </tr>
 
               <!-- Basic Pay -->
-              <tr>
-                <td>Total Basic</td>
-                <td class="text-right"><?= htmlspecialchars($selectedPayslip['no_of_hours'] ?? '0') ?> hrs</td>
-                <td class="text-right">₱<?= number_format($selectedPayslip['basic_pay'] ?? 0, 2) ?></td>
-              </tr>
+<tr>
+  <td>Total Basic</td>
+  <td class="text-right"><?= htmlspecialchars($selectedPayslip['no_of_hours'] ?? '0') ?> hrs</td>
+  <td class="text-right">₱<?= number_format($selectedPayslip['basic_pay'] ?? 0, 2) ?></td>
+</tr>
 
-              <!-- ✅ Conditional Overtime -->
-              <?php if (!empty($selectedPayslip['ot_hours']) && floatval($selectedPayslip['ot_hours']) > 0): ?>
-              <tr>
-                <td>Overtime</td>
-                <td class="text-right"><?= htmlspecialchars($selectedPayslip['ot_hours']) ?> hrs</td>
-                <td class="text-right">₱<?= number_format($selectedPayslip['ot_pay'] ?? 0, 2) ?></td>
-              </tr>
-              <?php endif; ?>
+<?php
+// ✅ Conditional earnings mapping
+$earnings = [
+  'ot_pay' => ['label' => 'Overtime', 'hours' => 'ot_hours'],
+  'rdot_pay' => ['label' => 'Rest Day OT', 'hours' => 'rdot_hours', 'rate' => 'rdot_rate'],
+  'night_dif_pay' => ['label' => 'Night Differential', 'hours' => 'nd_hours', 'rate' => 'nd_rate'],
+  'leave_w_pay' => ['label' => 'Leave with Pay'],
+  'special_holiday_pay' => ['label' => 'Special Holiday Pay', 'hours' => 'special_hol_hours', 'rate' => 'special_hol_rate'],
+  'regular_holiday_pay' => ['label' => 'Regular Holiday Pay', 'hours' => 'reg_hol_hours', 'rate' => 'reg_hol_rate'],
+  'special_holiday_ot_pay' => ['label' => 'Special Holiday OT Pay', 'hours' => 'special_hol_ot_hours', 'rate' => 'special_hol_ot_rate'],
+  'regular_holiday_ot_pay' => ['label' => 'Regular Holiday OT Pay', 'hours' => 'reg_hol_ot_hours', 'rate' => 'reg_hol_ot_rate'],
+  'allowance' => ['label' => 'Allowance'],
+  'sign_in_bonus' => ['label' => 'Sign-in Bonus'],
+  'other_adjustment' => ['label' => 'Other Adjustment']
+];
+
+// ✅ Loop through and display only if value > 0
+foreach ($earnings as $key => $meta) {
+  $amount = floatval($selectedPayslip[$key] ?? 0);
+  if ($amount > 0) {
+    echo "<tr>";
+    echo "<td>{$meta['label']}</td>";
+
+    // Optional Hours Column
+    if (isset($meta['hours']) && !empty($selectedPayslip[$meta['hours']])) {
+      echo "<td class='text-right'>" . htmlspecialchars($selectedPayslip[$meta['hours']]) . " hrs</td>";
+    } else {
+      echo "<td></td>";
+    }
+
+    // Amount Column
+    echo "<td class='text-right'>₱" . number_format($amount, 2) . "</td>";
+    echo "</tr>";
+  }
+}
+?>
+
             </table>
-            <p class="font-semibold mt-2 text-right">Total Compensation: ₱<?= number_format($selectedPayslip['basic_pay'] ?? 0, 2) ?></p>
+            <p class="font-semibold mt-2 text-right">Total Compensation: ₱<?= number_format($selectedPayslip['total_compensation'] ?? 0, 2) ?></p>
           </div>
 
           <!-- ✅ CONDITIONAL DEDUCTIONS -->
@@ -316,8 +344,9 @@ document.getElementById('downloadPdfBtn')?.addEventListener('click', async () =>
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8.5);
   const lines = [
-    'This payslip can be used for employment verification, loan applications, or proof of income.',
-    'For additional assistance or supporting documents, please contact HR.'
+    'This payslip can be used for any valid purposes you may require, including but not limited to employment verification, loan applications, visa or',
+    'travel documentation, and proof of income for financial institutions. Should you need further assistance or additional documentation',
+    'feel free to reach out.'
   ];
   let y = footerStartY + 5;
   lines.forEach(line => { pdf.text(line, 10, y); y += 4; });
